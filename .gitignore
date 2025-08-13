@@ -1,0 +1,29 @@
+#Ignore files
+config.py
+Data_Process_4.py
+Data_Process_5.py
+data_process_test.py
+Frame_Stitching.py
+main.py
+Migrate.zip
+test.py
+README.md
+
+#Ignore folders
+__pycache__/
+deprecated/
+inputs/
+labels/
+Migrate/
+model/
+outputs/
+semantic_drone_dataset/
+uavid_test/
+uavid_train/
+uavid_val/
+
+# Keep OneFormer Python files (these will NOT be ignored):
+# OneFormer_Inference_Image.py
+# OneFormer_Inference_Video.py
+# OneFormer_Realsense.py
+# OneFormer_Train.py
