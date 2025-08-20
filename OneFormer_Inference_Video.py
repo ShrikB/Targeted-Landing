@@ -12,7 +12,7 @@ from collections import deque
 import matplotlib
 matplotlib.use('Agg')
 
-model_path = "model/model4/"
+model_path = "models/model4/"
 output_fol = "outputs/gurt/"
 if not os.path.exists(output_fol):
     os.makedirs(output_fol, exist_ok=True)
@@ -25,7 +25,7 @@ model.model.is_training = False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
-vid = "inputs/DJI_20250408174712_0038_D.MP4"
+vid = "inputs/DJI_20250813185745_0002_D.MP4"
 cap = cv2.VideoCapture(vid)
 frame_count = 0
 
