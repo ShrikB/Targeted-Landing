@@ -24,6 +24,8 @@ with open("labels/id2label.json", "r") as f:
     57: "Pedestrian"
 }
 """
+
+"""
 orig_id2name = {
     0:  "Background",
     19:  "Tree",
@@ -33,11 +35,23 @@ orig_id2name = {
     10: "Building",
     6: "Rock",
     3: "Grass"
+}"""
+
+
+orig_id2name = {
+    0:  "Background",
+    188: "Trees",
+    153: "Road",
+    156:  "Sidewalk",
+    124: "Car",
+    177: "Trail",
+    174: "Building",
+    137: "Objects",
+    3: "Grass"
 }
 
-
 # now build a new compact id2label for 0…5
-new_id2label = {i: name for i, (_, name) in enumerate(orig_id2name.items())}
+new_id2label = {i: name for i, (_, name) in enumerate(orig_id2name.items())} 
 new_label2id = {v: k for k, v in new_id2label.items()}
 
 orig2new = {orig_id: new_label2id[name]
@@ -59,8 +73,10 @@ dataset = CustomDataset(
     processor,
     #img_dir="uavid_train/seq1/Images",
     #mask_dir="uavid_train/seq1/Labels",
-    img_dir="semantic_drone_dataset/original_images",
-    mask_dir="semantic_drone_dataset/label_images_semantic",
+    #img_dir="semantic_drone_dataset/original_images",
+    #mask_dir="semantic_drone_dataset/label_images_semantic",
+    img_dir="semantic_drone_dataset/Camera",
+    mask_dir="semantic_drone_dataset/Mask",
     target_size=(512, 512),
     label2id=orig2new,        
 )
@@ -88,5 +104,5 @@ for epoch in range(5):
         print("Loss:", loss.item())
         loss.backward()
         optimizer.step()
-model.save_pretrained("model/model6")
-processor.save_pretrained("model/model6")
+model.save_pretrained("model/model7_cusdat")
+processor.save_pretrained("model/model7_cusdat")

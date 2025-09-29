@@ -12,8 +12,8 @@ from collections import deque
 import matplotlib
 matplotlib.use('Agg')
 
-model_path = "model/model4/"
-output_fol = "outputs/gurt/"
+model_path = "model/model7_cusdat/"
+output_fol = "outputs/output(model7)_test2/"
 if not os.path.exists(output_fol):
     os.makedirs(output_fol, exist_ok=True)
 
@@ -25,7 +25,9 @@ model.model.is_training = False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
-vid = "inputs/DJI_20250408174712_0038_D.MP4"
+#vid = "inputs/DJI_20250408174712_0038_D.MP4"
+vid = "inputs/DJI_20250813185745_0002_D.MP4"
+
 cap = cv2.VideoCapture(vid)
 frame_count = 0
 
@@ -35,7 +37,7 @@ palette = np.random.randint(0, 255, (256, 3), dtype=np.uint8)
 
 window_size = 20
 avg_buffer  = deque(maxlen=window_size)
-threshold   = 0.2   # 5% relative change
+threshold   = 0.1   # 5% relative change
 
 while cap.isOpened():
     ret, frame = cap.read()
