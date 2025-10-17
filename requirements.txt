@@ -1,0 +1,7 @@
+matplotlib
+opencv-python
+torch
+torchvision
+transformers
+tqdm
+scipiy

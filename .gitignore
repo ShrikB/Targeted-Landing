@@ -21,6 +21,7 @@ semantic_drone_dataset/
 uavid_test/
 uavid_train/
 uavid_val/
+test data folder
 
 # Keep OneFormer Python files (these will NOT be ignored):
 # OneFormer_Inference_Image.py
