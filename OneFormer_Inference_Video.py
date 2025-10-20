@@ -103,7 +103,7 @@ def process_video_with_oneformer(model_path, output_folder, video_input, window_
             avg_buffer.append(avg_col)
 
             # Draw legend
-            for i, lid in enumerate(np.unique(seg)):
+            """for i, lid in enumerate(np.unique(seg)):
                 y = 30 * i + 20
                 c = palette[lid].tolist()
                 cv2.rectangle(overlay, (5, y - 15), (25, y + 5), c, -1)
@@ -112,7 +112,7 @@ def process_video_with_oneformer(model_path, output_folder, video_input, window_
                            (30, y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                            (255, 255, 255), 1)
-
+            """
             # Save frame
             cv2.imwrite(f"{output_folder}/semantic_{frame_count}.png", overlay)
 
