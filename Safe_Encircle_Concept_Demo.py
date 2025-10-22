@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 import glob
-
+# Demo script to process semantic segmentation masks
 # Configuration - Updated to use mask_merged output
 input_folder = "/home/shrekfedora/Projects/Targeted-Landing/mask outputs/test data folder/masked_merged/"
 output_folder = "/home/shrekfedora/Projects/Targeted-Landing/mask outputs/test data folder/encircled/"
