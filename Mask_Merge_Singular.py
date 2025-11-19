@@ -3,15 +3,16 @@ import numpy as np
 import os
 from pathlib import Path
 
-def process_single_semantic_mask(input_image_path, output_folder, safe_classes, unsafe_classes):
+def process_single_semantic_mask(input_image_path, output_folder, safe_classes, unsafe_classes, potential_classes):
     """
-    Process a single semantic segmentation mask to create safe/unsafe landing area mask.
+    Process a single semantic segmentation mask to create safe/unsafe/potential landing area mask.
     
     Args:
         input_image_path (str): Path to input PNG mask image
         output_folder (str): Path to folder where processed mask will be saved
         safe_classes (list): List of RGB color values for safe landing areas
         unsafe_classes (list): List of RGB color values for unsafe areas
+        potential_classes (list): List of RGB color values for potential areas
     
     Returns:
         str or None: Path to output file if successful, None if failed
@@ -23,6 +24,7 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
     # Convert color lists to numpy arrays for efficient computation
     safe_classes = [np.array(color) for color in safe_classes]
     unsafe_classes = [np.array(color) for color in unsafe_classes]
+    potential_classes = [np.array(color) for color in potential_classes]
     
     # Check if input file exists
     if not os.path.exists(input_image_path):
@@ -50,6 +52,12 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
         color_mask = np.all(mask_rgb == unsafe_color, axis=2)
         unsafe_mask = np.logical_or(unsafe_mask, color_mask)
     
+    # Create potential mask by combining all potential class colors
+    potential_mask = np.zeros(mask_rgb.shape[:2], dtype=bool)
+    for potential_color in potential_classes:
+        color_mask = np.all(mask_rgb == potential_color, axis=2)
+        potential_mask = np.logical_or(potential_mask, color_mask)
+    
     # Create output image - start with all black
     output = np.zeros_like(mask_rgb)
     
@@ -59,9 +67,13 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
     # Set the unsafe areas to red
     output[unsafe_mask] = [255, 0, 0]
     
+    # Set the potential areas to grey
+    output[potential_mask] = [128, 128, 128]
+    
     # The output image now contains:
     # - White pixels for safe areas (defined in safe_classes)
     # - Red pixels for unsafe areas (defined in unsafe_classes)
+    # - Grey pixels for potential areas (defined in potential_classes)
     # - Black pixels for all other areas
     
     # Generate output filename
@@ -97,10 +109,16 @@ if __name__ == "__main__":
         [93, 220, 53],   # Green car: #5DDC35
     ]
     
+    # Potential classes (will be colored grey in output)
+    potential_classes = [
+        [200, 200, 100],  # Example potential class color
+        [150, 180, 200],  # Another example potential class color
+    ]
+    
     # Process the single mask
-    result_path = process_single_semantic_mask(input_image, output_folder, safe_classes, unsafe_classes)
+    result_path = process_single_semantic_mask(input_image, output_folder, safe_classes, unsafe_classes, potential_classes)
     
     if result_path:
-        print(f"✅ Processing successful! Output saved to: {result_path}")
+        print(f"Processing successful! Output saved to: {result_path}")
     else:
-        print("❌ Processing failed!")
+        print("Processing failed!")
