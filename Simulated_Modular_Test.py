@@ -6,22 +6,26 @@ import os
 import time
 
 # ========== CONFIGURATION ==========
-model_path = "model/model7_cusdat"
-video_input = "/home/shrekfedora/Projects/Targeted-Landing/inputs/gurt.mp4"
-base_output_folder = "/home/shrekfedora/Projects/Targeted-Landing/outputs/frame_pipeline"
+model_path = "/home/avl-shrek/Documents/Projects/Targeted-Landing/model/model8_cusdat"
+video_input = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/gurt.mp4"
+base_output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/frame_pipeline"
 
 # Define safe and unsafe classes
 safe_classes = [
-    [159, 66, 133],  # Purple sidewalk: #9F4285
-    [38, 127, 102],  # Medium green road: #267F66
+    [159, 66, 133]  # Purple sidewalk: #9F4285
+   
+]
+
+potential_classes = [
+    [38, 127, 102]  # Medium green road: #267F66
 ]
 
 unsafe_classes = [
-    [93, 220, 53],   # Green car: #5DDC35
+    [93, 220, 53]   # Green car: #5DDC35
 ]
 
 # Processing parameters
-frame_resolution = (512, 512)
+frame_resolution = (1024, 1024)
 
 # ========== FOLDER SETUP ==========
 frames_folder = os.path.join(base_output_folder, "extracted_frames")
@@ -105,7 +109,8 @@ try:
                 input_image_path=semantic_path,
                 output_folder=masked_folder,
                 safe_classes=safe_classes,
-                unsafe_classes=unsafe_classes
+                unsafe_classes=unsafe_classes,
+                potential_classes=potential_classes
             )
             
             if not mask_output_path:

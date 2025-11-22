@@ -238,11 +238,11 @@ def find_single_landing_zone(input_image_path, output_folder, drone_size=15):
 
 # Example usage
 if __name__ == "__main__":
-    input_image = "/home/shrekfedora/Projects/Targeted-Landing/outputs/test_batch/masked_merged_single/semantic_frame_2530_modified.png"
-    output_folder = "/home/shrekfedora/Projects/Targeted-Landing/outputs/test_batch/landing_zones_single"
-    
-    result = find_single_landing_zone(input_image, output_folder, drone_size=20)  # 20px diameter drone
-    
+    input_image = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/test_batch/masked_merged_single/semantic_frame_2529_modified.png"
+    output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/test_batch/landing_zones_single"
+
+    result = find_single_landing_zone(input_image, output_folder, drone_size=15)  # 15px diameter drone
+
     if result:
         print(f"Landing zone processing successful!")
         print(f"   Center: ({result['center'][0]}, {result['center'][1]})")

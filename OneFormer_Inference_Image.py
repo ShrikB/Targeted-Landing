@@ -111,10 +111,10 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
 
 # Example usage (can be removed when importing)
 if __name__ == "__main__":
-    model_path = "model/model7_cusdat"
-    output_folder = "outputs/single_image/"
-    image_input = "inputs/frame_2530.png"
-    
+    model_path = "/home/avl-shrek/Documents/Projects/Targeted-Landing/model/model7_cusdat"
+    output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/single_image/"
+    image_input = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/frame_2529.png"
+
     success = process_image_with_oneformer(model_path, output_folder, image_input)
     if success:
         print("✅ Image processing completed successfully")

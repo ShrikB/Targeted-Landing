@@ -94,25 +94,25 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
 # Example usage
 if __name__ == "__main__":
     # Define input and output paths
-    input_image = "/home/shrekfedora/Projects/Targeted-Landing/outputs/single_image/semantic_frame_2530.png"
-    output_folder = "/home/shrekfedora/Projects/Targeted-Landing/outputs/test_batch/masked_merged_single"
+    #input_image = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/single_image/semantic_frame_2529.png"
+    input_image = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/frame_pipeline/semantic_output/semantic_frame_000995.png"
+    output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/test_batch/masked_merged_single"
     
     # Define safe and unsafe classes with their RGB colors
     # Safe classes (will be colored white in output)
     safe_classes = [
-        [159, 66, 133],  # Purple for sidewalk: #9F4285
-        [38, 127, 102],  # Medium green for road: #267F66
+        [159, 66, 133]  # Purple for sidewalk: #9F4285
+
     ]
     
     # Unsafe classes (will be colored red in output)
     unsafe_classes = [
-        [93, 220, 53],   # Green car: #5DDC35
+        [93, 220, 53]   # Green car: #5DDC35
     ]
     
     # Potential classes (will be colored grey in output)
     potential_classes = [
-        [200, 200, 100],  # Example potential class color
-        [150, 180, 200],  # Another example potential class color
+        [38, 127, 102]  # Medium green for road: #267F66
     ]
     
     # Process the single mask
