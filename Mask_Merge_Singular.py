@@ -64,17 +64,82 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
     # Set the safe areas to white
     output[safe_mask] = [255, 255, 255]
     
-    # Set the unsafe areas to red
-    output[unsafe_mask] = [255, 0, 0]
-    
     # Set the potential areas to grey
     output[potential_mask] = [128, 128, 128]
     
+    # Process red objects (unsafe areas) and create buffer zones
+    red_objects = []
+    red_mask_uint8 = unsafe_mask.astype(np.uint8) * 255
+    
+    if np.sum(red_mask_uint8) > 0:
+        # Find contours of red objects
+        contours, _ = cv2.findContours(red_mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        for contour in contours:
+            # Calculate area to filter out very small noise
+            area = cv2.contourArea(contour)
+            if area < 10:  # Skip very small contours
+                continue
+            
+            # Calculate centroid
+            M = cv2.moments(contour)
+            if M["m00"] != 0:
+                centroid_x = int(M["m10"] / M["m00"])
+                centroid_y = int(M["m01"] / M["m00"])
+            else:
+                continue
+            
+            # Create mask for this specific object
+            object_mask = np.zeros_like(red_mask_uint8)
+            cv2.drawContours(object_mask, [contour], -1, 255, -1)
+            
+            # Use distance transform to find maximum distance from centroid to edge
+            dist_transform_obj = cv2.distanceTransform(object_mask, cv2.DIST_L2, 5)
+            max_distance = dist_transform_obj.max()
+            
+            # Add 20 pixel buffer
+            buffer_radius = max_distance + 20
+            
+            # Draw the buffer zone as red in the output (expanding the red area)
+            cv2.circle(output, (centroid_x, centroid_y), int(buffer_radius), [255, 0, 0], -1)
+            
+            red_objects.append({
+                'centroid': (centroid_x, centroid_y),
+                'max_distance': max_distance,
+                'buffer_radius': buffer_radius
+            })
+    
+    # Set the original unsafe areas to red (to ensure they're visible)
+    output[unsafe_mask] = [255, 0, 0]
+    
+    # Check if any red buffer zones touch grey areas
+    grey_is_safe = True
+    if len(red_objects) > 0 and np.sum(potential_mask) > 0:
+        # Create a temporary mask with all red buffer zones
+        red_buffer_mask = np.zeros(mask_rgb.shape[:2], dtype=np.uint8)
+        for red_obj in red_objects:
+            centroid = red_obj['centroid']
+            buffer_radius = red_obj['buffer_radius']
+            cv2.circle(red_buffer_mask, centroid, int(buffer_radius), 255, -1)
+        
+        # Check if red buffer zones overlap with grey areas
+        grey_mask_uint8 = potential_mask.astype(np.uint8) * 255
+        overlap = cv2.bitwise_and(red_buffer_mask, grey_mask_uint8)
+        
+        if np.sum(overlap) > 0:
+            grey_is_safe = False
+            # Convert all grey areas to black
+            output[potential_mask] = [0, 0, 0]
+            print(f"  Red buffer zones detected in grey areas - converting all grey to black")
+    
     # The output image now contains:
     # - White pixels for safe areas (defined in safe_classes)
-    # - Red pixels for unsafe areas (defined in unsafe_classes)
-    # - Grey pixels for potential areas (defined in potential_classes)
-    # - Black pixels for all other areas
+    # - Red pixels for unsafe areas with buffer zones (defined in unsafe_classes + 20px buffer)
+    # - Grey pixels for potential areas (only if no red buffer zones touch them)
+    # - Black pixels for all other areas and unsafe grey regions
+    
+    print(f"  Found {len(red_objects)} red objects with buffer zones")
+    print(f"  Grey areas status: {'SAFE' if grey_is_safe else 'UNSAFE (converted to black)'}")
     
     # Generate output filename
     filename = os.path.basename(input_image_path)
@@ -95,7 +160,7 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
 if __name__ == "__main__":
     # Define input and output paths
     #input_image = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/single_image/semantic_frame_2529.png"
-    input_image = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/frame_pipeline/semantic_output/semantic_frame_000995.png"
+    input_image = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/semantic_frame_000246.png"
     output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/test_batch/masked_merged_single"
     
     # Define safe and unsafe classes with their RGB colors

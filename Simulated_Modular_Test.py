@@ -7,7 +7,7 @@ import time
 
 # ========== CONFIGURATION ==========
 model_path = "/home/avl-shrek/Documents/Projects/Targeted-Landing/model/model8_cusdat"
-video_input = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/gurt.mp4"
+video_input = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/12579479_3840_2160_30fps.mp4"
 base_output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/frame_pipeline"
 
 # Define safe and unsafe classes
@@ -25,7 +25,7 @@ unsafe_classes = [
 ]
 
 # Processing parameters
-frame_resolution = (1024, 1024)
+frame_resolution = (1280, 720)
 
 # ========== FOLDER SETUP ==========
 frames_folder = os.path.join(base_output_folder, "extracted_frames")
