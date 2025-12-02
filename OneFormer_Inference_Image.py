@@ -49,7 +49,7 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
         # Convert back to PIL for processor
         imgr_pil = Image.fromarray(cv2.cvtColor(imgr, cv2.COLOR_BGR2RGB))
     except Exception as e:
-        print(f"❌ Could not load image {image_input}: {e}")
+        print(f"Could not load image {image_input}: {e}")
         return False
 
     print(f"Processing image: {image_input}")
@@ -106,7 +106,7 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
         return True
 
     except Exception as e:
-        print(f"❌ Processing failed: {e}")
+        print(f"Processing failed: {e}")
         return False
 
 # Example usage (can be removed when importing)
@@ -117,6 +117,6 @@ if __name__ == "__main__":
 
     success = process_image_with_oneformer(model_path, output_folder, image_input)
     if success:
-        print("✅ Image processing completed successfully")
+        print("Image processing completed successfully")
     else:
-        print("❌ Image processing failed")
+        print("Image processing failed")

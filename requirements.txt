@@ -1,7 +1,7 @@
 matplotlib
 opencv-python
 torch
-torchvision-python
+torchvision
 transformers
 tqdm
 scipy

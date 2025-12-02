@@ -114,23 +114,28 @@ def process_single_semantic_mask(input_image_path, output_folder, safe_classes, 
     
     # Check if any red buffer zones touch grey areas
     grey_is_safe = True
-    if len(red_objects) > 0 and np.sum(potential_mask) > 0:
-        # Create a temporary mask with all red buffer zones
-        red_buffer_mask = np.zeros(mask_rgb.shape[:2], dtype=np.uint8)
-        for red_obj in red_objects:
-            centroid = red_obj['centroid']
-            buffer_radius = red_obj['buffer_radius']
-            cv2.circle(red_buffer_mask, centroid, int(buffer_radius), 255, -1)
-        
-        # Check if red buffer zones overlap with grey areas
-        grey_mask_uint8 = potential_mask.astype(np.uint8) * 255
-        overlap = cv2.bitwise_and(red_buffer_mask, grey_mask_uint8)
-        
-        if np.sum(overlap) > 0:
-            grey_is_safe = False
-            # Convert all grey areas to black
-            output[potential_mask] = [0, 0, 0]
-            print(f"  Red buffer zones detected in grey areas - converting all grey to black")
+    if np.sum(potential_mask) > 0:
+        if len(red_objects) > 0:
+            # Create a temporary mask with all red buffer zones
+            red_buffer_mask = np.zeros(mask_rgb.shape[:2], dtype=np.uint8)
+            for red_obj in red_objects:
+                centroid = red_obj['centroid']
+                buffer_radius = red_obj['buffer_radius']
+                cv2.circle(red_buffer_mask, centroid, int(buffer_radius), 255, -1)
+            
+            # Check if red buffer zones overlap with grey areas
+            grey_mask_uint8 = potential_mask.astype(np.uint8) * 255
+            overlap = cv2.bitwise_and(red_buffer_mask, grey_mask_uint8)
+            
+            if np.sum(overlap) > 0:
+                grey_is_safe = False
+                # Convert all grey areas to black
+                output[potential_mask] = [0, 0, 0]
+                print(f"  Red buffer zones detected in grey areas - converting all grey to black")
+        else:
+            # No red objects exist, so grey areas are safe - convert to white
+            output[potential_mask] = [255, 255, 255]
+            print(f"  No red objects detected - converting all grey to white (safe)")
     
     # The output image now contains:
     # - White pixels for safe areas (defined in safe_classes)

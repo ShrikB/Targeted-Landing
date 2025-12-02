@@ -6,9 +6,9 @@ import os
 import time
 
 # ========== CONFIGURATION ==========
-model_path = "/home/avl-shrek/Documents/Projects/Targeted-Landing/model/model8_cusdat"
-video_input = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/12579479_3840_2160_30fps.mp4"
-base_output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/frame_pipeline"
+model_path = "/home/avl-shrek/Documents/Targeted Landing Environment/Targeted-Landing/model/model10_cusdat"
+video_input = "/home/avl-shrek/Documents/Targeted Landing Environment/Targeted-Landing/inputs/8564838-hd_1920_1080_30fps.mp4"
+base_output_folder = "/home/avl-shrek/Documents/Targeted Landing Environment/Targeted-Landing/outputs/frame_pipeline_video2"
 
 # Define safe and unsafe classes
 safe_classes = [
@@ -157,12 +157,3 @@ try:
 
 finally:
     cap.release()
-
-# ========== FIND BEST LANDING ZONE ==========
-if all_results:
-    best_zone = max(all_results, key=lambda x: x['radius'])
-    print(f"\nBEST LANDING ZONE:")
-    print(f"   Center: ({best_zone['center'][0]}, {best_zone['center'][1]})")
-    print(f"   Vector to frame center: {best_zone['vector_to_frame_center']}")
-
-print(f"\nProcessing complete!")
