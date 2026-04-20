@@ -7,7 +7,6 @@ Frame_Stitching.py
 main.py
 Migrate.zip
 test.py
-README.md
 
 #Ignore folders
 __pycache__/
@@ -22,6 +21,13 @@ uavid_test/
 uavid_train/
 uavid_val/
 test data folder
+.venv/
+.vscode/
+App Paper Comparisons/
+new comparisons/
+old data/
+temp compare/
+
 
 # Keep OneFormer Python files (these will NOT be ignored):
 # OneFormer_Inference_Image.py

@@ -80,7 +80,7 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
         overlay = cv2.addWeighted(imgr, 0.0, color_mask, 1.0, 0)
 
         # Draw legend (optional - uncommented version)
-        """
+        
         for i, lid in enumerate(np.unique(seg)):
             y = 30 * i + 20
             c = palette[lid].tolist()
@@ -90,7 +90,7 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
                        (30, y),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                        (255, 255, 255), 1)
-        """
+        
 
         # Generate output filename
         image_name = os.path.splitext(os.path.basename(image_input))[0]
@@ -111,11 +111,11 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
 
 # Example usage (can be removed when importing)
 if __name__ == "__main__":
-    model_path = "/home/avl-shrek/Documents/Projects/Targeted-Landing/model/model7_cusdat"
-    output_folder = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/single_image/"
-    image_input = "/home/avl-shrek/Documents/Projects/Targeted-Landing/inputs/frame_2529.png"
+    model_path = "/home/shrekfedora/Projects/Targeted-Landing/model/model7_cusdat"
+    output_folder = "/home/shrekfedora/Projects/Targeted-Landing/outputs/single_image/"
+    image_input = "/home/shrekfedora/Projects/Targeted-Landing/inputs/000081.png"
 
-    success = process_image_with_oneformer(model_path, output_folder, image_input)
+    success = process_image_with_oneformer(model_path, output_folder, image_input, frame_resolution=(848, 480))
     if success:
         print("Image processing completed successfully")
     else:
