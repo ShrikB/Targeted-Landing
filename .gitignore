@@ -23,10 +23,11 @@ uavid_val/
 test data folder
 .venv/
 .vscode/
-App Paper Comparisons/
+All Paper Comparisions/
 new comparisons/
 old data/
 temp compare/
+Metrics/
 
 
 # Keep OneFormer Python files (these will NOT be ignored):
