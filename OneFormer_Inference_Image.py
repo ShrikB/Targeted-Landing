@@ -81,15 +81,15 @@ def process_image_with_oneformer(model_path, output_folder, image_input, frame_r
 
         # Draw legend (optional - uncommented version)
         
-        for i, lid in enumerate(np.unique(seg)):
-            y = 30 * i + 20
-            c = palette[lid].tolist()
-            cv2.rectangle(overlay, (5, y - 15), (25, y + 5), c, -1)
-            cv2.putText(overlay,
-                       f"{lid}:{model.config.id2label[lid]}",
-                       (30, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                       (255, 255, 255), 1)
+        # for i, lid in enumerate(np.unique(seg)):
+        #     y = 30 * i + 20
+        #     c = palette[lid].tolist()
+        #     cv2.rectangle(overlay, (5, y - 15), (25, y + 5), c, -1)
+        #     cv2.putText(overlay,
+        #                f"{lid}:{model.config.id2label[lid]}",
+        #                (30, y),
+        #                cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+        #                (255, 255, 255), 1)
         
 
         # Generate output filename

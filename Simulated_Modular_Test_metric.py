@@ -1,6 +1,6 @@
 from OneFormer_Inference_Image import process_image_with_oneformer
 from Mask_Merge_Singular import process_single_semantic_mask
-from Landing_Zone_Singular import find_single_landing_zone
+from Landing_Zone_Singular import StickyCircleLandingZoneFinder
 import cv2
 import os
 import time
@@ -11,7 +11,7 @@ from scipy.stats import mode
 # ========== CONFIGURATION ==========
 model_path = "/home/shrekfedora/Projects/Targeted-Landing/model/model_23_basedon19"
 video_input = "/home/shrekfedora/Projects/Targeted-Landing/inputs/8564838-hd_1920_1080_30fps.mp4"
-base_output_folder = "/home/shrekfedora/Projects/Targeted-Landing/outputs/polish_test11"
+base_output_folder = "/home/shrekfedora/Projects/Targeted-Landing/outputs/image_seg_stability_6"
 
 # Define safe and unsafe classes
 safe_classes = [
@@ -36,6 +36,17 @@ clahe_tile_size = (16, 16)
 # Temporal Stabilization parameters
 temporal_stabilization_enabled = True
 temporal_buffer_size = 8
+
+# Sticky circle parameters (start here; tune later)
+sticky_enabled = True
+sticky_alpha = 0.7
+sticky_beta = 0.5
+sticky_normalize_by = "width"  # "width" recommended
+
+# Adaptive smoothing (Gaussian-decay exponential smoothing)
+sticky_smoothing_enabled = True
+sticky_smoothing_k = 0.0005
+sticky_smoothing_min_alpha = 0.05
 
 # ========== FOLDER SETUP ==========
 frames_folder = os.path.join(base_output_folder, "extracted_frames")
@@ -239,6 +250,16 @@ def update_stage_stats(stage_name, duration):
 # ========== INITIALIZE MODULES ==========
 mask_stabilizer = MaskStabilizer(buffer_size=temporal_buffer_size) if temporal_stabilization_enabled else None
 
+lz_finder = StickyCircleLandingZoneFinder(
+    drone_size=30,
+    alpha=sticky_alpha,
+    beta=sticky_beta,
+    normalize_by=sticky_normalize_by,
+    smoothing_enabled=sticky_smoothing_enabled,
+    smoothing_k=sticky_smoothing_k,
+    smoothing_min_alpha=sticky_smoothing_min_alpha,
+) if sticky_enabled else None
+
 # ========== STAGE 1: READ VIDEO FRAME BY FRAME ==========
 cap = cv2.VideoCapture(video_input)
 
@@ -436,10 +457,17 @@ try:
         stage_start = time.time()
         
         try:
-            landing_result = find_single_landing_zone(
-                input_image_path=mask_output_path,
-                output_folder=landing_zones_folder
-            )
+            landing_result = None
+            if sticky_enabled and lz_finder is not None:
+                landing_result = lz_finder.find(
+                    input_image_path=mask_output_path,
+                    output_folder=landing_zones_folder
+                )
+            # else:
+            #     landing_result = find_single_landing_zone(
+            #         input_image_path=mask_output_path,
+            #         output_folder=landing_zones_folder
+            #     )
             
             stage_duration = time.time() - stage_start
             frame_timing["stages"]["landing_zone_detection"] = stage_duration
