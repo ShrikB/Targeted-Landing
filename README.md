@@ -50,6 +50,10 @@ The pipeline processes monocular RGB video feeds through a 6-stage architecture 
 5. **Landing Zone Detection:** Extracts the optimal landing centroid and maximum safe radius via spatial filtering and morphological closing operations.
 6. **Trajectory Smoothing:** A 6-state Kalman Filter equipped with Euclidean distance gating (Outlier Rejection) tracks the final descent vector to prevent coordinate teleportation.
 
+<p align="center">
+  <img src="assets/Pipeline3.png" width="1000" alt="System Architecture Diagram">
+</p>
+
 ---
 
 ## Key Features
@@ -57,7 +61,18 @@ The pipeline processes monocular RGB video feeds through a 6-stage architecture 
 * **Sim-to-Real Generalization:** Validated on proprietary DJI Mini suburban datasets and UAVid urban benchmarks without site-specific fine-tuning.
 * **Edge-Feasible:** Integrates OpenCV backends for spatial and temporal filtering, allowing the heavy ViT backbone to operate effectively on constrained computing budgets.
 * **Aerospace-Grade Stabilization:** Prevents erratic flight controller inputs through optical flow mask warping and kinetic state tracking.
-
+<table align="center">
+  <tr>
+    <td align="center">
+      <b>Suburban Domain</b><br>
+      <img src="assets/seqsuburb.gif" width="500" alt="Suburban Landing Zone Demo">
+    </td>
+    <td align="center">
+      <b>Urban Domain</b><br>
+      <img src="assets/seqcity.gif" width="500" alt="Urban Landing Zone Demo">
+    </td>
+  </tr>
+</table>
 ---
 
 ## Hardware & Software Requirements
@@ -109,7 +124,7 @@ The pipeline processes monocular RGB video feeds through a 6-stage architecture 
 The main pipeline can be executed via the primary inference script. Configuration for video inputs, model paths, and CLAHE parameters can be adjusted directly in the script header.
 
 ```bash
-python main_pipeline.py
+python Simulated_Modular_Test.metric.py
 ```
 
 ### Output Structure
@@ -122,6 +137,13 @@ outputs/
 ├── landing_zones/          # Final vector targeting overlays
 └── processing_timing.json  # Stage-by-stage latency analytics
 ```
+
+For dataset generation, a template for generating raw and masks is provided given the City Generation Add-On is enabled. Simply activate Generate.py file followed by the Maskup.py file.
+The generic template for both can be adjusted for more classes, frames, variances, plus any specific changed enabled by the Blender Engine.
+
+<p align="center">
+  <img src="assets/ds3.gif" width="800" alt="Dataset Generation Demo">
+</p>
 
 ---
 
@@ -137,14 +159,16 @@ The pipeline was subjected to a Binary Suitability Analysis to evaluate its viab
 * **Desktop Workstation (RTX A6000):** ~1.17s / frame.
 * **Jetson AGX Edge Hardware:** ~6.67s / frame.
 *(Note: Landing zone designation is a discrete, low-frequency event. The precision of the ViT justifies the latency over standard high-frequency obstacle avoidance).*
-
+<p align="center">
+  <img src="assets/01_confusion_matrix.png" width="500" alt="Confusion Matrix">
+</p>
 ---
 
 ## 🔭 Future Work
 To scale this architecture from a research prototype to a field-deployable system, the following optimizations are on the roadmap:
 * **NVIDIA TensorRT Integration:** Migrating the PyTorch inference backend to optimized TensorRT engines to maximize tensor core utilization on the Jetson AGX.
 * **Docker Containerization:** Encapsulating the ROS, CUDA, and PyTorch dependency chain to ensure seamless portability across heterogeneous UAV platforms.
-
+* **Dynamic Garbage Collection:** Implementing an automated storage management protocol for edge devices. To prevent storage exhaustion during sustained flights via rolling buffer.
 ---
 
 ## 📝 License
