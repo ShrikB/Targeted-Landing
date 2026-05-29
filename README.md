@@ -65,11 +65,11 @@ The pipeline processes monocular RGB video feeds through a 6-stage architecture 
   <tr>
     <td align="center">
       <b>Suburban Domain</b><br>
-      <img src="assets/seqsuburb.gif" width="500" alt="Suburban Landing Zone Demo">
+      <img src="assets/seqsuburb.gif" width="460" alt="Suburban Landing Zone Demo">
     </td>
     <td align="center">
       <b>Urban Domain</b><br>
-      <img src="assets/seqcity.gif" width="500" alt="Urban Landing Zone Demo">
+      <img src="assets/seqcity.gif" width="460" alt="Urban Landing Zone Demo">
     </td>
   </tr>
 </table>
