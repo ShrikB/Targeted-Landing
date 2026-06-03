@@ -1,9 +1,9 @@
-matplotlib
+numpy
 opencv-python
+scipy
 torch
 torchvision
 transformers
-tqdm
-scipy
-numpy
 pillow
+matplotlib
+tqdm

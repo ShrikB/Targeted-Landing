@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 # Path to semantic segmentation image (output from OneFormer)
-image_path = "/home/avl-shrek/Documents/Projects/Targeted-Landing/outputs/frame_pipeline/semantic_output/semantic_frame_000066.png"
+image_path = "outputs/frame_pipeline/semantic_output/semantic_frame_000066.png"
 
 # Check if input file exists
 if not os.path.exists(image_path):

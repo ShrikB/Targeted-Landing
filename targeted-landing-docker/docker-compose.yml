@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  targeted-landing:
+    build:
+      context: .
+      dockerfile: Dockerfiledp
+    volumes:
+      - ./src:/app/src
+      - ./model:/app/model
+      - ./inputs:/app/inputs
+      - ./outputs:/app/outputs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all          # Exposes all available host GPUs to this container
+              capabilities: [gpu] # Informs Docker to load the GPU passthrough drivers
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python src/Simulated_Modular_Test_metric.py
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge

@@ -6,12 +6,13 @@ import os
 import time
 import json
 import numpy as np
-from scipy.stats import mode
+import torch
+import torch.nn.functional as F
 
 # ========== CONFIGURATION ==========
 model_path = "model/model10_cusdat"
 video_input = "inputs/DJI_20250813185745_0002_D (trimmed).mp4"
-base_output_folder = "outputs/image_seg_stability_rural_4"
+base_output_folder = "outputs/image_seg_stability_rural_2"
 
 # Define safe and unsafe classes
 safe_classes = [
@@ -35,7 +36,7 @@ clahe_tile_size = (16, 16)
 
 # Temporal Stabilization parameters
 temporal_stabilization_enabled = True
-temporal_buffer_size = 8
+temporal_buffer_size = 2
 
 # Sticky circle parameters (start here; tune later)
 sticky_enabled = True
@@ -132,91 +133,214 @@ def apply_rgb_clahe(image, clip_limit=2.0, tile_size=(8, 8)):
 
 class MaskStabilizer:
     """
-    Stabilizes semantic masks using optical flow and temporal voting.
-    Reduces flicker and noise in segmentation output.
+    Stabilizes semantic masks using optical flow warping + fast temporal voting.
+
+    Optimizations:
+      1) Voting: removes scipy.stats.mode (slow in Docker) and uses fast NumPy logic
+         (majority vote specialized for small buffer sizes).
+      2) Warping: replaces cv2.remap (CPU) with torch grid_sample on GPU (nearest).
+
+    Notes:
+      - Output remains uint8 NumPy array (H, W, 3) in BGR ordering to match downstream code.
+      - Optical flow is still computed via OpenCV DIS on CPU (unless you change that separately).
     """
-    def __init__(self, buffer_size=3):
-        """
-        Initialize mask stabilizer.
-        
-        Args:
-            buffer_size: Number of frames to use for temporal voting
-        """
-        self.buffer_size = buffer_size
+    def __init__(self, buffer_size=3, device=None):
+        self.buffer_size = int(buffer_size)
         self.mask_buffer = []
         self.prev_gray = None
-        # UltraFast preset is optimized for real-time performance
         self.dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST)
 
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
+
+        # Cache base grid per (H, W) to avoid rebuilding every frame
+        self._grid_hw = None
+        self._base_grid = None  # (1, H, W, 2) in normalized coords
+
+    @staticmethod
+    def _ensure_3ch_bgr(mask):
+        if mask is None:
+            return None
+        if len(mask.shape) == 2:
+            return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        if mask.shape[2] == 1:
+            return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        return mask
+
+    def _get_base_grid(self, h, w, device):
+        """
+        Returns normalized base grid for grid_sample, shape: (1, H, W, 2)
+        where grid[...,0] is x in [-1,1], grid[...,1] is y in [-1,1].
+        """
+        if self._grid_hw == (h, w) and self._base_grid is not None and self._base_grid.device == device:
+            return self._base_grid
+
+        # Use align_corners=True, so mapping is:
+        # x_norm = 2*x/(W-1) - 1 ; y_norm = 2*y/(H-1) - 1
+        ys, xs = torch.meshgrid(
+            torch.arange(h, device=device, dtype=torch.float32),
+            torch.arange(w, device=device, dtype=torch.float32),
+            indexing="ij",
+        )
+        x_norm = (2.0 * xs / max(w - 1, 1)) - 1.0
+        y_norm = (2.0 * ys / max(h - 1, 1)) - 1.0
+        grid = torch.stack((x_norm, y_norm), dim=-1).unsqueeze(0)  # (1,H,W,2)
+
+        self._grid_hw = (h, w)
+        self._base_grid = grid
+        return grid
+
+    def _warp_mask_gpu(self, mask_bgr_uint8, flow_xy_float32):
+        """
+        Warp a single mask using flow (from prev->current) with nearest sampling on GPU.
+        mask_bgr_uint8: (H,W,3) uint8
+        flow_xy_float32: (H,W,2) float32 in pixel units (dx, dy)
+
+        Returns: (H,W,3) uint8
+        """
+        h, w = mask_bgr_uint8.shape[:2]
+        dev = self.device
+
+        # Prepare input tensor: (N,C,H,W) float32
+        mask_t = torch.from_numpy(mask_bgr_uint8).to(dev, non_blocking=True)
+        mask_t = mask_t.permute(2, 0, 1).unsqueeze(0).to(torch.float32)  # 1,3,H,W
+
+        # Flow tensor: (1,H,W,2) float32
+        flow_t = torch.from_numpy(flow_xy_float32).to(dev, non_blocking=True).to(torch.float32).unsqueeze(0)
+
+        # Build normalized sampling grid:
+        # cv2.remap used map = base + flow; so we do same:
+        base = self._get_base_grid(h, w, dev)  # normalized base coords for each pixel center
+
+        # Convert pixel flow to normalized delta
+        # align_corners=True normalization:
+        # dx_norm = 2*dx/(W-1), dy_norm = 2*dy/(H-1)
+        denom_x = float(max(w - 1, 1))
+        denom_y = float(max(h - 1, 1))
+        flow_norm = torch.empty_like(flow_t)
+        flow_norm[..., 0] = 2.0 * flow_t[..., 0] / denom_x
+        flow_norm[..., 1] = 2.0 * flow_t[..., 1] / denom_y
+
+        grid = base + flow_norm  # (1,H,W,2)
+
+        # Nearest keeps exact class colors.
+        warped = F.grid_sample(
+            mask_t,
+            grid,
+            mode="nearest",
+            padding_mode="border",   # BORDER_REPLICATE equivalent-ish
+            align_corners=True,
+        )
+
+        warped_u8 = warped.squeeze(0).permute(1, 2, 0).clamp(0, 255).to(torch.uint8).cpu().numpy()
+        return warped_u8
+
+    @staticmethod
+    def _majority_vote_uint8(stack):
+        """
+        stack: uint8 array of shape (N, H, W, 3) or (N, H, W) for single channel.
+        Returns: uint8 array of shape (H, W, 3) or (H, W).
+        Optimized for N in {2,3}. For larger N, uses bincount via view (still NumPy-only).
+        """
+        n = stack.shape[0]
+
+        if n == 1:
+            return stack[0]
+
+        if n == 2:
+            # If they disagree, prefer the NEWER one (last element).
+            a, b = stack[0], stack[1]
+            return np.where(a == b, a, b).astype(np.uint8)
+
+        if n == 3:
+            a, b, c = stack[0], stack[1], stack[2]
+            ab = (a == b)
+            ac = (a == c)
+            bc = (b == c)
+
+            # Majority logic:
+            # - if a==b -> pick a
+            # - elif a==c -> pick a
+            # - elif b==c -> pick b
+            # - else all different -> pick newest (c)
+            out = np.where(ab, a, np.where(ac, a, np.where(bc, b, c)))
+            return out.astype(np.uint8)
+
+        # Generic fallback for N>3:
+        # For full RGB, vote per-byte per-channel independently (same behavior as old code).
+        # This is still much faster than scipy.stats.mode in Docker.
+        if stack.ndim == 4:  # (N,H,W,3)
+            out = np.empty(stack.shape[1:], dtype=np.uint8)
+            for ch in range(stack.shape[-1]):
+                out[..., ch] = MaskStabilizer._majority_vote_uint8(stack[..., ch])
+            return out
+
+        # stack is (N,H,W) uint8: count occurrences per pixel
+        # reshape to (H*W, N) and compute mode with bincount per row
+        h, w = stack.shape[1], stack.shape[2]
+        flat = stack.reshape(n, h * w).T  # (H*W, N)
+
+        # bincount for each pixel row (N is small; 256 bins)
+        # vectorized using one-hot accumulation
+        counts = np.zeros((flat.shape[0], 256), dtype=np.uint16)
+        rows = np.arange(flat.shape[0])[:, None]
+        np.add.at(counts, (rows, flat), 1)
+        mode_vals = counts.argmax(axis=1).astype(np.uint8)
+        return mode_vals.reshape(h, w)
+
     def stabilize(self, current_bgr_frame, current_semantic_mask):
-        """
-        Stabilize current semantic mask using optical flow and temporal voting.
-        
-        Args:
-            current_bgr_frame: Current video frame in BGR format
-            current_semantic_mask: Current semantic segmentation mask (RGB colors)
-        
-        Returns:
-            Stabilized semantic mask with preserved RGB class colors
-        """
-        # Ensure input is 3-channel
-        if len(current_semantic_mask.shape) == 2:
-            current_semantic_mask = cv2.cvtColor(current_semantic_mask, cv2.COLOR_GRAY2BGR)
-        if current_semantic_mask.shape[2] == 1:
-            current_semantic_mask = cv2.cvtColor(current_semantic_mask, cv2.COLOR_GRAY2BGR)
-        
+        current_semantic_mask = self._ensure_3ch_bgr(current_semantic_mask)
+
         current_gray = cv2.cvtColor(current_bgr_frame, cv2.COLOR_BGR2GRAY)
-        
-        # If first frame, initialize buffer
+
+        # First frame: initialize buffer
         if self.prev_gray is None:
             self.prev_gray = current_gray
             self.mask_buffer = [current_semantic_mask.copy() for _ in range(self.buffer_size)]
             return current_semantic_mask.copy()
 
-        # 1. Calculate optical flow between frames
-        flow = self.dis.calc(self.prev_gray, current_gray, None)
-        h, w = current_gray.shape
-        
-        # Create remap maps for warping
-        map_x, map_y = np.meshgrid(np.arange(w), np.arange(h))
-        map_x = np.float32(map_x + flow[..., 0])
-        map_y = np.float32(map_y + flow[..., 1])
+        # Optical flow (CPU)
+        flow = self.dis.calc(self.prev_gray, current_gray, None)  # (H,W,2) float32
+        self.prev_gray = current_gray
 
-        # 2. Warp all masks in buffer to align with current frame
+        # Warp masks in buffer on GPU (if available)
         warped_buffer = []
         for mask in self.mask_buffer:
             try:
-                # INTER_NEAREST preserves exact RGB class colors
-                warped = cv2.remap(
-                    mask, 
-                    map_x, 
-                    map_y, 
-                    cv2.INTER_NEAREST,
-                    borderMode=cv2.BORDER_REPLICATE
-                )
+                if self.device.type == "cuda":
+                    warped = self._warp_mask_gpu(mask, flow)
+                else:
+                    # CPU fallback: keep old remap behavior if no CUDA
+                    h, w = current_gray.shape
+                    map_x, map_y = np.meshgrid(np.arange(w), np.arange(h))
+                    map_x = np.float32(map_x + flow[..., 0])
+                    map_y = np.float32(map_y + flow[..., 1])
+                    warped = cv2.remap(
+                        mask,
+                        map_x,
+                        map_y,
+                        cv2.INTER_NEAREST,
+                        borderMode=cv2.BORDER_REPLICATE,
+                    )
                 warped_buffer.append(warped)
             except Exception as e:
                 print(f"   Warning: Warping failed, using original mask: {e}")
                 warped_buffer.append(mask.copy())
 
-        # 3. Add current raw mask and manage buffer size
+        # Append current raw mask (newest)
         warped_buffer.append(current_semantic_mask.copy())
-        if len(warped_buffer) > self.buffer_size:
-            warped_buffer.pop(0)
-            
-        self.mask_buffer = warped_buffer
-        self.prev_gray = current_gray
 
-        # 4. Temporal Voting (Mode) - find most common color per pixel
-        smoothed = np.zeros_like(self.mask_buffer[0], dtype=np.uint8)
-        
-        h, w, c = smoothed.shape
-        
-        for ch in range(c):
-            channel_stack = np.stack([mask[:, :, ch] for mask in self.mask_buffer], axis=-1)
-            smoothed_channel, _ = mode(channel_stack, axis=-1, keepdims=False)
-            smoothed[:, :, ch] = smoothed_channel.astype(np.uint8)
-        
+        # Keep last buffer_size frames
+        if len(warped_buffer) > self.buffer_size:
+            warped_buffer = warped_buffer[-self.buffer_size :]
+
+        self.mask_buffer = warped_buffer
+
+        # Temporal voting (NumPy), per-channel like previous implementation
+        stack = np.stack(self.mask_buffer, axis=0)  # (N,H,W,3) uint8
+        smoothed = self._majority_vote_uint8(stack)
+
         return smoothed
 
 
