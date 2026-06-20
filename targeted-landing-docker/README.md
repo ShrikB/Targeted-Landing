@@ -43,14 +43,8 @@ targeted-landing-docker
    docker build -t targeted-landing .
    ```
 
-4. **Run the Docker Container**:
-   You can run the container using:
-   ```
-   docker run --rm -v $(pwd)/inputs:/app/inputs -v $(pwd)/outputs:/app/outputs targeted-landing
-   ```
-
-5. **Using Docker Compose**:
-   If you prefer to use Docker Compose, you can start the services defined in `docker-compose.yml` with:
+4. **Run using Docker Compose**:
+   You can run the container using docker compose via services defined in `docker-compose.yml` with:
    ```
    docker-compose up
    ```

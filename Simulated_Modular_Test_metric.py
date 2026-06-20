@@ -13,6 +13,10 @@ model_path = "model/model10_cusdat"
 video_input = "inputs/DJI_20250813185745_0002_D (trimmed).mp4"
 base_output_folder = "outputs/image_seg_stability_rural_4"
 
+# Garbage collection parameters
+garbage_collection_enabled = True
+garbage_collection_threshold = 100  # Keep only the last N files per folder
+
 # Define safe and unsafe classes
 safe_classes = [
     [159, 66, 133]  # Purple sidewalk: #9F4285
@@ -129,6 +133,64 @@ def apply_rgb_clahe(image, clip_limit=2.0, tile_size=(8, 8)):
     enhanced_bgr = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
     
     return enhanced_bgr
+
+class GarbageCollector:
+    """
+    Manages disk space by removing oldest files from output folders.
+    Keeps only the most recent N files per folder to prevent storage exhaustion.
+    """
+    def __init__(self, enabled=True, threshold=100):
+        self.enabled = bool(enabled)
+        self.threshold = int(threshold)
+
+    def cleanup(self, folder_path):
+        """
+        Remove oldest files from folder if file count exceeds threshold.
+        
+        Args:
+            folder_path (str): Path to folder to clean
+            
+        Returns:
+            int: Number of files deleted
+        """
+        if not self.enabled or not os.path.exists(folder_path):
+            return 0
+
+        try:
+            # Get all files in folder (non-recursive)
+            files = [
+                os.path.join(folder_path, f)
+                for f in os.listdir(folder_path)
+                if os.path.isfile(os.path.join(folder_path, f))
+            ]
+
+            if len(files) <= self.threshold:
+                return 0
+
+            # Sort by modification time (oldest first)
+            files.sort(key=os.path.getmtime)
+
+            # Calculate how many files to delete
+            num_to_delete = len(files) - self.threshold
+            files_to_delete = files[:num_to_delete]
+
+            # Delete oldest files
+            deleted_count = 0
+            for file_path in files_to_delete:
+                try:
+                    os.remove(file_path)
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"   Warning: Could not delete {file_path}: {e}")
+
+            if deleted_count > 0:
+                print(f"   [GC] Cleaned {deleted_count} files from {os.path.basename(folder_path)}")
+
+            return deleted_count
+
+        except Exception as e:
+            print(f"   Warning: Garbage collection failed for {folder_path}: {e}")
+            return 0
 
 class MaskStabilizer:
     """
@@ -248,6 +310,11 @@ def update_stage_stats(stage_name, duration):
     stats["avg_time"] = stats["total_time"] / stats["count"]
 
 # ========== INITIALIZE MODULES ==========
+gc = GarbageCollector(
+    enabled=garbage_collection_enabled,
+    threshold=garbage_collection_threshold,
+)
+
 mask_stabilizer = MaskStabilizer(buffer_size=temporal_buffer_size) if temporal_stabilization_enabled else None
 
 lz_finder = StickyCircleLandingZoneFinder(
@@ -320,6 +387,9 @@ try:
         update_stage_stats("frame_extraction", stage_duration)
         print(f"   Frame extraction: {stage_duration:.3f}s")
         
+        # [GC] Cleanup old frames
+        gc.cleanup(frames_folder)
+        
         # ========== STAGE 3: APPLY RGB CLAHE ENHANCEMENT ==========
         stage_start = time.time()
         
@@ -377,6 +447,9 @@ try:
             semantic_path = os.path.join(semantic_folder, semantic_filename)
             semantic_mask = cv2.imread(semantic_path)
             
+            # [GC] Cleanup old semantic masks
+            gc.cleanup(semantic_folder)
+            
         except Exception as e:
             stage_duration = time.time() - stage_start
             frame_timing["stages"]["semantic_segmentation"] = stage_duration
@@ -417,6 +490,10 @@ try:
         else:
             frame_timing["stages"]["temporal_stabilization"] = 0
         
+        # [GC] Cleanup old stabilized masks
+        if temporal_stabilization_enabled:
+            gc.cleanup(semantic_stabilized_folder)
+        
         # ========== STAGE 6: MASK MERGING ==========
         stage_start = time.time()
         
@@ -441,6 +518,9 @@ try:
                 timing_data["per_frame_timings"].append(frame_timing)
                 frame_count += 1
                 continue
+            
+            # [GC] Cleanup old merged masks
+            gc.cleanup(masked_folder)
                 
         except Exception as e:
             stage_duration = time.time() - stage_start
@@ -477,6 +557,9 @@ try:
             # ========== STAGE 8: LANDING ZONE TRACKING & SMOOTHING ==========
             # DISABLED - Landing zone tracking removed for now
             frame_timing["stages"]["kalman_filtering"] = 0
+            
+            # [GC] Cleanup old landing zone outputs
+            gc.cleanup(landing_zones_folder)
             
             # End timing for this frame
             frame_end_time = time.time()

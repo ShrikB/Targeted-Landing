@@ -167,8 +167,8 @@ The pipeline was subjected to a Binary Suitability Analysis to evaluate its viab
 ## 🔭 Future Work
 To scale this architecture from a research prototype to a field-deployable system, the following optimizations are on the roadmap:
 * **NVIDIA TensorRT Integration:** Migrating the PyTorch inference backend to optimized TensorRT engines to maximize tensor core utilization on the Jetson AGX.
-* **Docker Containerization:** Encapsulating the ROS, CUDA, and PyTorch dependency chain to ensure seamless portability across heterogeneous UAV platforms.
-* **Dynamic Garbage Collection:** Implementing an automated storage management protocol for edge devices. To prevent storage exhaustion during sustained flights via rolling buffer.
+~~* **Docker Containerization:** Encapsulating the ROS, CUDA, and PyTorch dependency chain to ensure seamless portability across heterogeneous UAV platforms.~~
+~~* **Dynamic Garbage Collection:** Implementing an automated storage management protocol for edge devices. To prevent storage exhaustion during sustained flights via rolling buffer.~~
 ---
 
 ## 📝 License
