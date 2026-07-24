@@ -6,12 +6,21 @@ import os
 import time
 import json
 import numpy as np
+import pyrealsense2 as rs
 from scipy.stats import mode
 
 # ========== CONFIGURATION ==========
 model_path = "model/model10_cusdat"
-video_input = "inputs/DJI_20250813185745_0002_D (trimmed).mp4"
 base_output_folder = "outputs/image_seg_stability_rural_4"
+
+# Intel RealSense live capture parameters
+realsense_color_resolution = (1280, 720)    # (width, height) of the color stream
+realsense_depth_resolution = (1280, 720)    # (width, height) of the depth stream
+realsense_fps = 30
+realsense_depth_enabled = True              # capture depth alongside color
+realsense_align_depth_to_color = True       # register depth onto the color pixel grid
+realsense_frame_timeout_ms = 5000           # how long to wait for a frameset
+realsense_max_frames = 0                    # 0 = stream until Ctrl+C
 
 # Garbage collection parameters
 garbage_collection_enabled = True
@@ -58,6 +67,7 @@ semantic_folder = os.path.join(base_output_folder, "semantic_output")
 semantic_stabilized_folder = os.path.join(base_output_folder, "semantic_stabilized")
 masked_folder = os.path.join(base_output_folder, "masked_output")
 landing_zones_folder = os.path.join(base_output_folder, "landing_zones")
+depth_folder = os.path.join(base_output_folder, "depth_raw")
 
 # Create all directories
 os.makedirs(base_output_folder, exist_ok=True)
@@ -66,8 +76,10 @@ os.makedirs(semantic_folder, exist_ok=True)
 os.makedirs(semantic_stabilized_folder, exist_ok=True)
 os.makedirs(masked_folder, exist_ok=True)
 os.makedirs(landing_zones_folder, exist_ok=True)
+if realsense_depth_enabled:
+    os.makedirs(depth_folder, exist_ok=True)
 
-print(f"Processing video: {video_input}")
+print(f"Capture source: Intel RealSense live stream")
 print(f"Output directory: {base_output_folder}")
 print(f"CLAHE enabled - Clip Limit: {clahe_clip_limit}, Tile Size: {clahe_tile_size}")
 print(f"Temporal Stabilization enabled - Buffer Size: {temporal_buffer_size}")
@@ -75,11 +87,16 @@ print(f"Temporal Stabilization enabled - Buffer Size: {temporal_buffer_size}")
 # ========== TIMING TRACKING ==========
 timing_data = {
     "metadata": {
-        "video_input": video_input,
+        "capture_source": "realsense_live",
+        "realsense_device": "",
+        "realsense_serial": "",
+        "realsense_color_resolution": realsense_color_resolution,
+        "realsense_depth_enabled": realsense_depth_enabled,
         "output_folder": base_output_folder,
         "frame_resolution": frame_resolution,
         "total_frames": 0,
         "processed_frames": 0,
+        "dropped_frames": 0,
         "fps": 0,
         "clahe_enabled": True,
         "clahe_clip_limit": clahe_clip_limit,
@@ -327,22 +344,51 @@ lz_finder = StickyCircleLandingZoneFinder(
     smoothing_min_alpha=sticky_smoothing_min_alpha,
 ) if sticky_enabled else None
 
-# ========== STAGE 1: READ VIDEO FRAME BY FRAME ==========
-cap = cv2.VideoCapture(video_input)
+# ========== STAGE 1: OPEN REALSENSE LIVE STREAM ==========
+pipeline = rs.pipeline()
+rs_config = rs.config()
 
-if not cap.isOpened():
-    print(f"Error: Could not open video file {video_input}")
+color_width, color_height = realsense_color_resolution
+rs_config.enable_stream(rs.stream.color, color_width, color_height, rs.format.bgr8, realsense_fps)
+
+if realsense_depth_enabled:
+    depth_width, depth_height = realsense_depth_resolution
+    rs_config.enable_stream(rs.stream.depth, depth_width, depth_height, rs.format.z16, realsense_fps)
+
+try:
+    profile = pipeline.start(rs_config)
+except RuntimeError as e:
+    print(f"Error: Could not start RealSense pipeline: {e}")
+    print("Check the camera is connected and the requested stream profile is supported.")
     exit(1)
 
-# Get video properties
-total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-fps = cap.get(cv2.CAP_PROP_FPS)
+device = profile.get_device()
+device_name = device.get_info(rs.camera_info.name)
+device_serial = device.get_info(rs.camera_info.serial_number)
 
-timing_data["metadata"]["total_frames"] = total_frames
-timing_data["metadata"]["fps"] = fps
+# Align depth onto the color pixel grid so both share the same coordinates
+align = rs.align(rs.stream.color) if (realsense_depth_enabled and realsense_align_depth_to_color) else None
 
-print(f"Video properties: {total_frames} frames at {fps:.2f} FPS")
-print(f"Processing all frames as they become available")
+# Scale factor converting raw z16 units to meters
+depth_scale = device.first_depth_sensor().get_depth_scale() if realsense_depth_enabled else None
+
+# Live stream has no fixed length; total_frames is only known if the run is capped
+timing_data["metadata"]["total_frames"] = realsense_max_frames
+timing_data["metadata"]["fps"] = realsense_fps
+timing_data["metadata"]["realsense_device"] = device_name
+timing_data["metadata"]["realsense_serial"] = device_serial
+if depth_scale is not None:
+    timing_data["metadata"]["depth_scale_meters_per_unit"] = depth_scale
+
+print(f"RealSense device: {device_name} (serial {device_serial})")
+print(f"Color stream: {color_width}x{color_height} @ {realsense_fps} FPS (bgr8)")
+if realsense_depth_enabled:
+    print(f"Depth stream: {depth_width}x{depth_height} @ {realsense_fps} FPS (z16), scale {depth_scale:.6f} m/unit")
+    print(f"Depth aligned to color: {realsense_align_depth_to_color}")
+if realsense_max_frames > 0:
+    print(f"Capturing {realsense_max_frames} frames")
+else:
+    print("Streaming live - press Ctrl+C to stop")
 
 # Record overall start time
 overall_start_time = time.time()
@@ -350,45 +396,93 @@ timing_data["overall_timing"]["start_time"] = time.strftime("%Y-%m-%d %H:%M:%S",
 
 frame_count = 0
 processed_count = 0
+dropped_count = 0
 all_results = []
 
 try:
     while True:
-        ret, frame = cap.read()
-        if not ret:
+        if realsense_max_frames > 0 and frame_count >= realsense_max_frames:
             break
-        
+
+        try:
+            frames = pipeline.wait_for_frames(timeout_ms=realsense_frame_timeout_ms)
+        except RuntimeError as e:
+            print(f"Stream error while waiting for frames: {e}")
+            break
+
+        # Downstream processing is slower than the camera framerate, so the
+        # pipeline buffer fills while the previous frame is in flight. Drain it
+        # and keep only the newest frameset - a stale landing zone is worse than
+        # a skipped one.
+        while True:
+            newer_frames = pipeline.poll_for_frames()
+            if not newer_frames:
+                break
+            frames = newer_frames
+            dropped_count += 1
+
+        if align is not None:
+            frames = align.process(frames)
+
+        color_frame = frames.get_color_frame()
+        if not color_frame:
+            print("   Warning: frameset had no color frame, skipping")
+            continue
+
+        # Same handoff as the old cap.read(): HxWx3 uint8 BGR array
+        frame = np.asanyarray(color_frame.get_data())
+
+        # Hardware timestamp (ms) and device frame number, taken at grab time
+        capture_timestamp_ms = color_frame.get_timestamp()
+        device_frame_number = color_frame.get_frame_number()
+
+        depth_image = None
+        if realsense_depth_enabled:
+            depth_frame = frames.get_depth_frame()
+            if depth_frame:
+                depth_image = np.asanyarray(depth_frame.get_data())
+
         print(f"\n--- Processing Frame {frame_count} ---")
-        
+
         # Start timing for this frame
         frame_start_time = time.time()
-        
+
         # Initialize frame timing dictionary
         frame_timing = {
             "frame_number": frame_count,
+            "device_frame_number": device_frame_number,
+            "capture_timestamp_ms": capture_timestamp_ms,
             "stages": {},
             "total_time": 0,
             "success": False,
             "landing_zone_found": False
         }
-        
+
         # ========== STAGE 2: SAVE FRAME ==========
         stage_start = time.time()
-        
+
         frame_filename = f"frame_{frame_count:06d}.png"
         frame_path = os.path.join(frames_folder, frame_filename)
-        
+
         # Resize frame to target resolution
         resized_frame = cv2.resize(frame, frame_resolution)
         cv2.imwrite(frame_path, resized_frame)
-        
+
+        # Persist raw depth (16-bit, unscaled units) alongside the color frame
+        if depth_image is not None:
+            depth_path = os.path.join(depth_folder, f"depth_{frame_count:06d}.png")
+            resized_depth = cv2.resize(depth_image, frame_resolution, interpolation=cv2.INTER_NEAREST)
+            cv2.imwrite(depth_path, resized_depth)
+
         stage_duration = time.time() - stage_start
         frame_timing["stages"]["frame_extraction"] = stage_duration
         update_stage_stats("frame_extraction", stage_duration)
         print(f"   Frame extraction: {stage_duration:.3f}s")
-        
+
         # [GC] Cleanup old frames
         gc.cleanup(frames_folder)
+        if realsense_depth_enabled:
+            gc.cleanup(depth_folder)
         
         # ========== STAGE 3: APPLY RGB CLAHE ENHANCEMENT ==========
         stage_start = time.time()
@@ -600,15 +694,19 @@ try:
         
         frame_count += 1
 
+except KeyboardInterrupt:
+    print("\nInterrupted - stopping live capture")
+
 finally:
-    cap.release()
-    
+    pipeline.stop()
+
     # Record overall end time
     overall_end_time = time.time()
     overall_duration = overall_end_time - overall_start_time
     timing_data["overall_timing"]["end_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(overall_end_time))
     timing_data["overall_timing"]["total_duration"] = overall_duration
     timing_data["metadata"]["processed_frames"] = processed_count
+    timing_data["metadata"]["dropped_frames"] = dropped_count
     
     # Convert timing data to serializable format
     timing_data = convert_to_serializable(timing_data)
@@ -623,6 +721,7 @@ finally:
     print("PROCESSING COMPLETE - TIMING SUMMARY")
     print("="*80)
     print(f"Total frames processed: {frame_count}")
+    print(f"Frames dropped to stay live: {dropped_count}")
     print(f"Successful landing zones: {processed_count}")
     print(f"Total processing time: {overall_duration:.2f}s")
     print(f"Average time per frame: {overall_duration/frame_count if frame_count > 0 else 0:.3f}s")

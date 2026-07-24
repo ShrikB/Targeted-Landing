@@ -7,3 +7,4 @@ tqdm
 scipy
 numpy
 pillow
+pyrealsense2
